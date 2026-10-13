@@ -9,7 +9,8 @@
     "build": "vite build",
     "start": "vite build && electron electron/main.js --no-sandbox --disable-gpu-sandbox",
     "electron": "electron electron/main.js --no-sandbox --disable-gpu-sandbox",
-    "dist": "vite build && electron-builder --win"
+    "dist": "vite build && electron-builder --win",
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "@marzipan/updater": "file:../UpdateModule",
