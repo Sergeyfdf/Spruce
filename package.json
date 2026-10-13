@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "start": "vite build && electron electron/main.js --no-sandbox --disable-gpu-sandbox",
-    "electron": "electron electron/main.js --no-sandbox --disable-gpu-sandbox"
+    "electron": "electron electron/main.js --no-sandbox --disable-gpu-sandbox",
+    "dist": "vite build && electron-builder --win"
   },
   "dependencies": {
     "@marzipan/updater": "file:../UpdateModule",
@@ -28,7 +29,33 @@
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^34.2.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"
+  },
+  "build": {
+    "appId": "com.spruce.minecraft",
+    "productName": "Spruce",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "node_modules/@marzipan/updater/dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "electron/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }
