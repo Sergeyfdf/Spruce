@@ -1,6 +1,6 @@
 {
   "name": "spruce",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "description": "Minecraft Server Manager and Orchestrator",
   "main": "electron/main.js",
   "type": "module",
