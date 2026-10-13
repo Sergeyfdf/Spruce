@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-electron/
+out/
+release/
+servers/
+runtimes/
+bin/playit.exe
+bin/playit_secret.txt
+.env
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
