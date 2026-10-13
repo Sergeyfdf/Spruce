@@ -85,7 +85,8 @@ async function run() {
   }
 
   const files = fs.readdirSync(releaseDir);
-  const exeName = files.find((f) => f.endsWith('.exe') && !f.includes('__uninstaller') && !f.startsWith('win-'));
+  const exeName = files.find((f) => f.endsWith('.exe') && f.includes(newVersion) && !f.includes('__uninstaller') && !f.startsWith('win-'))
+    || files.find((f) => f.endsWith('.exe') && !f.includes('__uninstaller') && !f.startsWith('win-'));
   if (!exeName) {
     throw new Error('Installer .exe not found in release directory');
   }
