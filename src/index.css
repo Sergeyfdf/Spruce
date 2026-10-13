@@ -1083,10 +1083,31 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
-.mzp-updater-dot-success {
+.mzp-updater-dot {
   display: none !important;
 }
 
 .mzp-updater-text-success {
   color: #a1a1aa !important;
+}
+
+.mzp-updater-text-highlight {
+  color: #d4d4d8 !important;
+}
+
+.mzp-updater-version-badge {
+  color: #d4d4d8 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.mzp-updater-btn-primary {
+  background: #222226 !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+}
+
+.mzp-updater-btn-primary:hover {
+  background: #2e2e33 !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
 }
