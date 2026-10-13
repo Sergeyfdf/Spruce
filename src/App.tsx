@@ -7,15 +7,21 @@ import { ServerDashboard } from './components/ServerDashboard';
 import { Radio, ShieldCheck, HardDrive, RefreshCw, Copy, Check, ExternalLink } from 'lucide-react';
 import { UpdateCard } from '@marzipan/updater/react';
 import '@marzipan/updater/react/style.css';
+import { StorageSettingsCard } from './components/StorageSettingsCard';
+import { InitialSetupModal } from './components/InitialSetupModal';
+import { ModpacksView } from './components/ModpacksView';
+import { StorageConfig } from './types';
 
 export const App: React.FC = () => {
   const [servers, setServers] = useState<ServerType[]>([]);
   const [selectedServer, setSelectedServer] = useState<ServerType | null>(null);
   const [currentView, setCurrentView] = useState<string>('servers');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createModpackId, setCreateModpackId] = useState<string | undefined>(undefined);
   const [localIp, setLocalIp] = useState('127.0.0.1');
   const [copiedTunnel, setCopiedTunnel] = useState(false);
   const [manualSecret, setManualSecret] = useState('');
+  const [isInitialSetupOpen, setIsInitialSetupOpen] = useState(false);
 
   const [playit, setPlayit] = useState<PlayitStatus>({
     running: false,
@@ -37,10 +43,21 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleInitialSetupComplete = async () => {
+    setIsInitialSetupOpen(false);
+    await loadServers();
+  };
+
   useEffect(() => {
     loadServers();
 
     if (window.spruceApi) {
+      window.spruceApi.getStorageConfig().then((cfg: StorageConfig) => {
+        if (cfg && !cfg.isSetupCompleted) {
+          setIsInitialSetupOpen(true);
+        }
+      });
+
       window.spruceApi.getLocalIp().then((ip: string) => setLocalIp(ip));
       window.spruceApi.getPlayitStatus().then((s: PlayitStatus) => setPlayit(s));
 
@@ -109,9 +126,11 @@ export const App: React.FC = () => {
   const handleTogglePlayit = async () => {
     if (!window.spruceApi) return;
     if (playit.running) {
-      await window.spruceApi.stopPlayit();
+      const res = await window.spruceApi.stopPlayit();
+      if (res) setPlayit(res);
     } else {
-      await window.spruceApi.startPlayit();
+      const res = await window.spruceApi.startPlayit();
+      if (res) setPlayit(res);
     }
   };
 
@@ -128,9 +147,7 @@ export const App: React.FC = () => {
         currentView={currentView}
         onSelectView={(view) => {
           setCurrentView(view);
-          if (view === 'servers') {
-            setSelectedServer(null);
-          }
+          setSelectedServer(null);
         }}
         serversCount={servers.length}
         playitRunning={playit.running}
@@ -159,6 +176,15 @@ export const App: React.FC = () => {
               onStopServer={handleStopServer}
               onDeleteServer={handleDeleteServer}
               onOpenCreate={() => setIsCreateOpen(true)}
+            />
+          </div>
+        ) : currentView === 'modpacks' ? (
+          <div className="content-body" style={{ maxWidth: '1200px', width: '100%' }}>
+            <ModpacksView
+              onCreateServerWithModpack={(modpackId) => {
+                setCreateModpackId(modpackId);
+                setIsCreateOpen(true);
+              }}
             />
           </div>
         ) : currentView === 'tunnel' ? (
@@ -279,13 +305,16 @@ export const App: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="content-body" style={{ maxWidth: '640px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="content-body" style={{ maxWidth: '1200px', width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
               <div>
                 <h2 style={{ fontSize: '24px', fontWeight: 800 }}>Настройки</h2>
               </div>
 
-              <UpdateCard title="Обновления Spruce" />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '20px', alignItems: 'start' }}>
+                <StorageSettingsCard />
+                <UpdateCard title="Обновления Spruce" />
+              </div>
             </div>
           </div>
         )}
@@ -293,8 +322,17 @@ export const App: React.FC = () => {
 
       <ServerCreateModal
         isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
+        initialModpackId={createModpackId}
+        onClose={() => {
+          setIsCreateOpen(false);
+          setCreateModpackId(undefined);
+        }}
         onCreate={handleCreateServer}
+      />
+
+      <InitialSetupModal
+        isOpen={isInitialSetupOpen}
+        onComplete={handleInitialSetupComplete}
       />
     </div>
   );

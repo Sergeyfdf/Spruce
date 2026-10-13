@@ -3,6 +3,8 @@ export interface Server {
   name: string;
   mcVersion: string;
   loader: 'vanilla' | 'fabric' | 'forge' | 'neoforge';
+  loaderVersion?: string;
+  modpackId?: string;
   ramMin: number;
   ramMax: number;
   port: number;
@@ -115,4 +117,29 @@ export interface ModDetail {
   gameVersions?: string[];
   gallery: ModGalleryItem[];
   source: 'modrinth' | 'curseforge';
+}
+
+export interface StorageConfig {
+  dataDir: string;
+  defaultDir: string;
+  isSetupCompleted: boolean;
+}
+
+export interface ModpackItem {
+  id: string;
+  source: 'modrinth' | 'custom';
+  name: string;
+  slug?: string;
+  description: string;
+  iconUrl?: string | null;
+  downloads?: number;
+  mcVersion: string;
+  loader: string;
+  loaderVersion?: string;
+  mrpackFile?: string;
+  modsCount?: number;
+  downloadedAt?: string;
+  author?: string;
+  loaders?: string[];
+  versions?: string[];
 }

@@ -577,9 +577,17 @@ body {
   color: #cbd5e1;
 }
 
-.log-info { color: #38bdf8; }
-.log-warn { color: #fbbf24; }
-.log-error { color: #f87171; }
+.log-info {
+  color: #38bdf8;
+}
+
+.log-warn {
+  color: #fbbf24;
+}
+
+.log-error {
+  color: #f87171;
+}
 
 .console-input-bar {
   display: flex;
@@ -832,7 +840,8 @@ body {
   color: #d4d4d8;
 }
 
-.form-input, .form-select {
+.form-input,
+.form-select {
   background: #161616;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -845,7 +854,8 @@ body {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-.form-input:focus, .form-select:focus {
+.form-input:focus,
+.form-select:focus {
   border-color: rgba(255, 255, 255, 0.28);
   background: #1c1c1c;
 }
@@ -890,7 +900,8 @@ body {
   font-size: 13px;
 }
 
-.autocomplete-item:hover, .autocomplete-item.active {
+.autocomplete-item:hover,
+.autocomplete-item.active {
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -994,6 +1005,7 @@ body {
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -1083,9 +1095,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
-.mzp-updater-dot {
-  display: none !important;
-}
+
 
 .mzp-updater-text-success {
   color: #a1a1aa !important;

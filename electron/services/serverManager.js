@@ -6,26 +6,30 @@ import { resolveJavaPath } from './javaManager.js';
 import { getRecommendedJava, getFabricLoaders, getForgeVersion, getNeoForgeVersion } from './versionService.js';
 import { startPlayit, stopPlayit } from './networkManager.js';
 import { ensureBlueMapConfig } from './bluemapService.js';
+import { getServersDir, migrateLegacyData } from './pathManager.js';
+import { applyModpackToServer } from './modpackService.js';
 
-const SERVERS_DIR = path.resolve(process.cwd(), 'servers');
 const runningProcesses = new Map();
 const serverLogs = new Map();
 const onlinePlayersMap = new Map();
 const statusCallbacks = new Map();
 
 export function ensureServersDir() {
-  if (!fs.existsSync(SERVERS_DIR)) {
-    fs.mkdirSync(SERVERS_DIR, { recursive: true });
+  migrateLegacyData();
+  const serversDir = getServersDir();
+  if (!fs.existsSync(serversDir)) {
+    fs.mkdirSync(serversDir, { recursive: true });
   }
 }
 
 export function listServers() {
   ensureServersDir();
-  const entries = fs.readdirSync(SERVERS_DIR);
+  const serversDir = getServersDir();
+  const entries = fs.readdirSync(serversDir);
   const result = [];
 
   for (const dirName of entries) {
-    const sDir = path.join(SERVERS_DIR, dirName);
+    const sDir = path.join(serversDir, dirName);
     const metaPath = path.join(sDir, 'spruce.json');
     if (fs.existsSync(metaPath)) {
       try {
@@ -51,7 +55,7 @@ export function listServers() {
 export async function createServer({ name, mcVersion, loader, ramMin = 2048, ramMax = 4096, port = 25565, seed = '' }, onProgress) {
   ensureServersDir();
   const id = 'srv_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6);
-  const serverPath = path.join(SERVERS_DIR, id);
+  const serverPath = path.join(getServersDir(), id);
   fs.mkdirSync(serverPath, { recursive: true });
 
   const requiredJava = getRecommendedJava(mcVersion);
@@ -62,6 +66,8 @@ export async function createServer({ name, mcVersion, loader, ramMin = 2048, ram
     name,
     mcVersion,
     loader,
+    loaderVersion: data.loaderVersion || '',
+    modpackId: data.modpackId || null,
     ramMin,
     ramMax,
     port,
@@ -82,7 +88,7 @@ export async function createServer({ name, mcVersion, loader, ramMin = 2048, ram
 
   if (loader === 'fabric') {
     const loaders = await getFabricLoaders(mcVersion);
-    const loaderVer = loaders[0] || '0.16.10';
+    const loaderVer = data.loaderVersion || loaders[0] || '0.16.10';
     const installerVer = '1.0.1';
     const fabricUrl = `https://meta.fabricmc.net/v2/versions/loader/${mcVersion}/${loaderVer}/${installerVer}/server/jar`;
 
@@ -96,7 +102,7 @@ export async function createServer({ name, mcVersion, loader, ramMin = 2048, ram
     });
     fs.writeFileSync(jarPath, Buffer.from(jarRes.data));
   } else if (loader === 'forge') {
-    const forgeVer = await getForgeVersion(mcVersion);
+    const forgeVer = data.loaderVersion || await getForgeVersion(mcVersion);
     if (!forgeVer) {
       throw new Error(`Версия Forge для Minecraft ${mcVersion} не найдена`);
     }
@@ -139,7 +145,7 @@ export async function createServer({ name, mcVersion, loader, ramMin = 2048, ram
     }
     fs.writeFileSync(path.join(serverPath, 'spruce.json'), JSON.stringify(meta, null, 2));
   } else if (loader === 'neoforge') {
-    const neoVer = await getNeoForgeVersion(mcVersion);
+    const neoVer = data.loaderVersion || await getNeoForgeVersion(mcVersion);
     if (!neoVer) {
       throw new Error(`Версия NeoForge для Minecraft ${mcVersion} не найдена (поддерживается с 1.20.2+)`);
     }
@@ -177,6 +183,12 @@ export async function createServer({ name, mcVersion, loader, ramMin = 2048, ram
     fs.writeFileSync(path.join(serverPath, 'spruce.json'), JSON.stringify(meta, null, 2));
   } else {
     await downloadVanillaJar(mcVersion, jarPath, onProgress);
+  }
+
+  if (data.modpackId) {
+    try {
+      await applyModpackToServer(serverPath, data.modpackId, onProgress);
+    } catch (e) {}
   }
 
   return {
@@ -219,7 +231,7 @@ export async function startServer(serverId, onLog, onStatusChange) {
     }
   }
 
-  const serverPath = path.join(SERVERS_DIR, serverId);
+  const serverPath = path.join(getServersDir(), serverId);
   const metaPath = path.join(serverPath, 'spruce.json');
   if (!fs.existsSync(metaPath)) {
     throw new Error('Server configuration spruce.json missing');
@@ -470,7 +482,7 @@ export function deleteServer(serverId) {
     killServer(serverId);
   }
 
-  const serverPath = path.join(SERVERS_DIR, serverId);
+  const serverPath = path.join(getServersDir(), serverId);
   if (fs.existsSync(serverPath)) {
     fs.rmSync(serverPath, { recursive: true, force: true });
     serverLogs.delete(serverId);
@@ -481,7 +493,7 @@ export function deleteServer(serverId) {
 }
 
 export function getServerProperties(serverId) {
-  const propsPath = path.join(SERVERS_DIR, serverId, 'server.properties');
+  const propsPath = path.join(getServersDir(), serverId, 'server.properties');
   if (!fs.existsSync(propsPath)) {
     return {};
   }
@@ -502,14 +514,14 @@ export function getServerProperties(serverId) {
 }
 
 export function saveServerProperties(serverId, props) {
-  const propsPath = path.join(SERVERS_DIR, serverId, 'server.properties');
+  const propsPath = path.join(getServersDir(), serverId, 'server.properties');
   const lines = [];
   for (const [key, value] of Object.entries(props)) {
     lines.push(`${key}=${value}`);
   }
   fs.writeFileSync(propsPath, lines.join('\n') + '\n');
 
-  const metaPath = path.join(SERVERS_DIR, serverId, 'spruce.json');
+  const metaPath = path.join(getServersDir(), serverId, 'spruce.json');
   if (fs.existsSync(metaPath) && props['level-seed'] !== undefined) {
     try {
       const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));

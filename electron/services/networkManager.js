@@ -5,14 +5,16 @@ import crypto from 'crypto';
 import { spawn, execSync } from 'child_process';
 import axios from 'axios';
 import natUpnp from 'nat-upnp';
+import { getBinDir, migrateLegacyData } from './pathManager.js';
 
-const BIN_DIR = path.resolve(process.cwd(), 'bin');
-const SECRET_PATH = path.join(BIN_DIR, 'playit_secret.txt');
-const TOML_PATH = path.join(BIN_DIR, 'playit.toml');
+const getSecretPath = () => path.join(getBinDir(), 'playit_secret.txt');
+const getTomlPath = () => path.join(getBinDir(), 'playit.toml');
 
 let upnpClient = null;
 let playitProcess = null;
 let claimPollTimer = null;
+let currentTargetPort = 25565;
+const statusListeners = new Set();
 
 let playitStatus = {
   running: false,
@@ -21,9 +23,25 @@ let playitStatus = {
   logs: []
 };
 
+export function onPlayitStatus(fn) {
+  statusListeners.add(fn);
+  return () => statusListeners.delete(fn);
+}
+
+function broadcastStatus() {
+  const snapshot = { ...playitStatus };
+  for (const fn of statusListeners) {
+    try {
+      fn(snapshot);
+    } catch (e) {}
+  }
+}
+
 function ensureBinDir() {
-  if (!fs.existsSync(BIN_DIR)) {
-    fs.mkdirSync(BIN_DIR, { recursive: true });
+  migrateLegacyData();
+  const binDir = getBinDir();
+  if (!fs.existsSync(binDir)) {
+    fs.mkdirSync(binDir, { recursive: true });
   }
 }
 
@@ -84,7 +102,7 @@ export function toggleUpnp(port = 25565, enable = true) {
 
 export async function ensurePlayitBinary() {
   ensureBinDir();
-  const exePath = path.join(BIN_DIR, 'playit.exe');
+  const exePath = path.join(getBinDir(), 'playit.exe');
   if (fs.existsSync(exePath)) {
     return exePath;
   }
@@ -103,12 +121,14 @@ export async function ensurePlayitBinary() {
 }
 
 function getStoredSecret() {
-  if (fs.existsSync(SECRET_PATH)) {
-    const s = fs.readFileSync(SECRET_PATH, 'utf8').trim();
+  const secretPath = getSecretPath();
+  const tomlPath = getTomlPath();
+  if (fs.existsSync(secretPath)) {
+    const s = fs.readFileSync(secretPath, 'utf8').trim();
     if (s) return s;
   }
-  if (fs.existsSync(TOML_PATH)) {
-    const content = fs.readFileSync(TOML_PATH, 'utf8');
+  if (fs.existsSync(tomlPath)) {
+    const content = fs.readFileSync(tomlPath, 'utf8');
     const match = content.match(/secret_key\s*=\s*["']([^"']+)["']/);
     if (match) return match[1].trim();
   }
@@ -117,8 +137,8 @@ function getStoredSecret() {
 
 function saveSecret(secret) {
   ensureBinDir();
-  fs.writeFileSync(SECRET_PATH, secret.trim());
-  fs.writeFileSync(TOML_PATH, `secret_key = "${secret.trim()}"\n`);
+  fs.writeFileSync(getSecretPath(), secret.trim());
+  fs.writeFileSync(getTomlPath(), `secret_key = "${secret.trim()}"\n`);
 }
 
 async function fetchRundataTunnels(secret) {
@@ -204,6 +224,10 @@ async function createMinecraftTunnel(secret, port = 25565) {
 }
 
 export async function startPlayit(onStatusChange, targetPort = 25565) {
+  if (onStatusChange) {
+    statusListeners.add(onStatusChange);
+  }
+  currentTargetPort = Number(targetPort) || 25565;
   ensureBinDir();
   const exePath = await ensurePlayitBinary();
   const secret = getStoredSecret();
@@ -211,21 +235,18 @@ export async function startPlayit(onStatusChange, targetPort = 25565) {
   if (playitProcess) {
     if (secret) {
       const tunnels = await fetchRundataTunnels(secret);
-      const numPort = Number(targetPort) || 25565;
-      let matched = tunnels.find((t) => getTunnelLocalPort(t) === numPort);
+      let matched = tunnels.find((t) => getTunnelLocalPort(t) === currentTargetPort);
       if (!matched) {
-        matched = await createMinecraftTunnel(secret, numPort);
-        if (matched) {
-          await launchDaemon(exePath, secret, onStatusChange, numPort);
-        }
-      } else {
+        matched = await createMinecraftTunnel(secret, currentTargetPort);
+      }
+      if (matched) {
         const domain = matched.custom_domain || matched.assigned_domain;
         if (domain) {
-          const p = matched.port ? (matched.port.from || matched.port) : numPort;
+          const p = matched.port ? (matched.port.from || matched.port) : currentTargetPort;
           playitStatus.tunnelAddress = `${domain}:${p}`;
-          if (onStatusChange) onStatusChange({ ...playitStatus });
         }
       }
+      broadcastStatus();
     }
     return playitStatus;
   }
@@ -242,7 +263,7 @@ export async function startPlayit(onStatusChange, targetPort = 25565) {
     const claimUrl = `https://playit.gg/claim/${claimCode}`;
     playitStatus.claimUrl = claimUrl;
     playitStatus.logs.push(`[Spruce] Требуется привязка: ${claimUrl}`);
-    if (onStatusChange) onStatusChange({ ...playitStatus });
+    broadcastStatus();
 
     try {
       await axios.post('https://api.playit.gg/claim/setup', {
@@ -279,9 +300,9 @@ export async function startPlayit(onStatusChange, targetPort = 25565) {
             saveSecret(newSecret);
             playitStatus.claimUrl = null;
             playitStatus.logs.push('[Spruce] Аккаунт Playit успешно привязан!');
-            if (onStatusChange) onStatusChange({ ...playitStatus });
+            broadcastStatus();
 
-            await launchDaemon(exePath, newSecret, onStatusChange, targetPort);
+            await launchDaemon(exePath, newSecret, currentTargetPort);
           }
         }
       } catch (err) {
@@ -291,41 +312,39 @@ export async function startPlayit(onStatusChange, targetPort = 25565) {
     return playitStatus;
   }
 
-  await launchDaemon(exePath, secret, onStatusChange, targetPort);
+  await launchDaemon(exePath, secret, currentTargetPort);
   return playitStatus;
 }
 
-async function launchDaemon(exePath, secret, onStatusChange, targetPort = 25565) {
-  const numPort = Number(targetPort) || 25565;
+async function launchDaemon(exePath, secret, targetPort = 25565) {
+  currentTargetPort = Number(targetPort) || 25565;
   let tunnels = await fetchRundataTunnels(secret);
-  let matched = tunnels.find((t) => getTunnelLocalPort(t) === numPort);
+  let matched = tunnels.find((t) => getTunnelLocalPort(t) === currentTargetPort);
 
   if (!matched) {
-    const created = await createMinecraftTunnel(secret, numPort);
+    const created = await createMinecraftTunnel(secret, currentTargetPort);
     if (created) {
       const refreshed = await fetchRundataTunnels(secret);
-      matched = refreshed.find((t) => getTunnelLocalPort(t) === numPort);
+      matched = refreshed.find((t) => getTunnelLocalPort(t) === currentTargetPort);
     }
   }
 
   if (matched) {
     const domain = matched.custom_domain || matched.assigned_domain;
     if (domain) {
-      const p = matched.port ? (matched.port.from || matched.port) : numPort;
+      const p = matched.port ? (matched.port.from || matched.port) : currentTargetPort;
       playitStatus.tunnelAddress = `${domain}:${p}`;
       playitStatus.logs.push(`[Spruce] Адрес туннеля: ${playitStatus.tunnelAddress}`);
-      if (onStatusChange) onStatusChange({ ...playitStatus });
-    } else {
-      playitStatus.tunnelAddress = null;
     }
   }
+  broadcastStatus();
 
   try {
     execSync('taskkill /F /IM playit.exe', { stdio: 'ignore' });
   } catch (e) {}
 
   playitProcess = spawn(exePath, ['--secret', secret], {
-    cwd: BIN_DIR,
+    cwd: getBinDir(),
     windowsHide: true
   });
 
@@ -345,7 +364,21 @@ async function launchDaemon(exePath, secret, onStatusChange, targetPort = 25565)
       playitStatus.tunnelAddress = tunnelMatch[1];
     }
 
-    if (onStatusChange) onStatusChange({ ...playitStatus });
+    if (!playitStatus.tunnelAddress && text.includes('playit connected')) {
+      fetchRundataTunnels(secret).then((list) => {
+        const m = list.find((t) => getTunnelLocalPort(t) === currentTargetPort);
+        if (m) {
+          const d = m.custom_domain || m.assigned_domain;
+          if (d) {
+            const prt = m.port ? (m.port.from || m.port) : currentTargetPort;
+            playitStatus.tunnelAddress = `${d}:${prt}`;
+            broadcastStatus();
+          }
+        }
+      }).catch(() => {});
+    }
+
+    broadcastStatus();
   };
 
   playitProcess.stdout.on('data', handleOutput);
@@ -354,7 +387,7 @@ async function launchDaemon(exePath, secret, onStatusChange, targetPort = 25565)
   playitProcess.on('close', () => {
     playitProcess = null;
     playitStatus.running = false;
-    if (onStatusChange) onStatusChange({ ...playitStatus });
+    broadcastStatus();
   });
 }
 
@@ -379,34 +412,32 @@ export function stopPlayit() {
   } catch (e) {}
 
   playitStatus.running = false;
+  broadcastStatus();
   return playitStatus;
 }
 
 export async function getPlayitStatus(targetPort) {
   playitStatus.running = !!playitProcess;
+  const numPort = targetPort ? Number(targetPort) : currentTargetPort;
+  if (numPort) currentTargetPort = numPort;
 
   const secret = getStoredSecret();
   if (secret) {
     const tunnels = await fetchRundataTunnels(secret);
     if (tunnels.length > 0) {
-      const numPort = targetPort ? Number(targetPort) : null;
-      let matched = numPort ? tunnels.find((t) => getTunnelLocalPort(t) === numPort) : null;
-      if (!matched && !numPort) matched = tunnels[0];
+      let matched = tunnels.find((t) => getTunnelLocalPort(t) === currentTargetPort);
+      if (!matched && !targetPort) matched = tunnels[0];
+      if (!matched && targetPort) {
+        matched = await createMinecraftTunnel(secret, currentTargetPort);
+      }
       if (matched) {
         const domain = matched.custom_domain || matched.assigned_domain;
         if (domain) {
-          const p = matched.port ? (matched.port.from || matched.port) : (numPort || 25565);
-          return {
-            ...playitStatus,
-            tunnelAddress: `${domain}:${p}`
-          };
+          const p = matched.port ? (matched.port.from || matched.port) : currentTargetPort;
+          playitStatus.tunnelAddress = `${domain}:${p}`;
         }
       }
-      return {
-        ...playitStatus,
-        tunnelAddress: null
-      };
     }
   }
-  return playitStatus;
+  return { ...playitStatus };
 }

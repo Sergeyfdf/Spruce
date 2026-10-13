@@ -99,6 +99,78 @@ export async function getNeoForgeVersion(mcVersion) {
   }
 }
 
+export async function getForgeVersions(mcVersion) {
+  try {
+    const res = await axios.get(`https://bmclapi2.bangbang93.com/forge/minecraft/${mcVersion}`, { timeout: 6000 });
+    if (Array.isArray(res.data) && res.data.length > 0) {
+      const list = res.data
+        .map((x) => x.version)
+        .filter(Boolean)
+        .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+      return list;
+    }
+  } catch (e) {}
+
+  try {
+    const res = await axios.get('https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml', { timeout: 7000 });
+    const text = typeof res.data === 'string' ? res.data : '';
+    const regex = new RegExp(`<version>${mcVersion}-(.*?)</version>`, 'g');
+    const matches = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      matches.push(match[1]);
+    }
+    if (matches.length > 0) {
+      matches.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+      return matches;
+    }
+  } catch (e) {}
+
+  try {
+    const res = await axios.get('https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json', { timeout: 6000 });
+    const promos = res.data.promos || {};
+    const rec = promos[`${mcVersion}-recommended`];
+    const lat = promos[`${mcVersion}-latest`];
+    const list = [];
+    if (rec) list.push(rec);
+    if (lat && lat !== rec) list.push(lat);
+    if (list.length > 0) return list;
+  } catch (e) {}
+
+  const single = await getForgeVersion(mcVersion);
+  return single ? [single] : [];
+}
+
+export async function getNeoForgeVersions(mcVersion) {
+  const parts = mcVersion.split('.').map(Number);
+  const minor = parts[1] || 0;
+  const patch = parts[2] || 0;
+
+  if (minor < 20 || (minor === 20 && patch < 2)) {
+    return [];
+  }
+
+  const prefix = minor === 20 ? `20.${patch}.` : `21.${patch}.`;
+
+  try {
+    const res = await axios.get('https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge', { timeout: 6000 });
+    const matching = (res.data.versions || [])
+      .filter((v) => v.startsWith(prefix) && !v.includes('beta') && !v.includes('alpha'))
+      .reverse();
+    if (matching.length > 0) return matching.slice(0, 20);
+  } catch (e) {}
+
+  const single = await getNeoForgeVersion(mcVersion);
+  return single ? [single] : [];
+}
+
+export async function getLoaderVersions(loader, mcVersion) {
+  if (loader === 'fabric') return await getFabricLoaders(mcVersion);
+  if (loader === 'forge') return await getForgeVersions(mcVersion);
+  if (loader === 'neoforge') return await getNeoForgeVersions(mcVersion);
+  return [];
+}
+
 export function getRecommendedJava(gameVersion) {
   if (!gameVersion) return 21;
   const str = String(gameVersion).trim();

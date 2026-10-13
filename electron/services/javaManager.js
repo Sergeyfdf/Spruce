@@ -4,12 +4,13 @@ import axios from 'axios';
 import AdmZip from 'adm-zip';
 import { execSync } from 'child_process';
 export { getRecommendedJava } from './versionService.js';
-
-const RUNTIMES_DIR = path.resolve(process.cwd(), 'runtimes');
+import { getRuntimesDir, migrateLegacyData } from './pathManager.js';
 
 export function ensureRuntimesDir() {
-  if (!fs.existsSync(RUNTIMES_DIR)) {
-    fs.mkdirSync(RUNTIMES_DIR, { recursive: true });
+  migrateLegacyData();
+  const runtimesDir = getRuntimesDir();
+  if (!fs.existsSync(runtimesDir)) {
+    fs.mkdirSync(runtimesDir, { recursive: true });
   }
 }
 
@@ -31,7 +32,7 @@ export function getSystemJavaVersion() {
 
 export function getInstalledManagedJava(version) {
   ensureRuntimesDir();
-  const javaDir = path.join(RUNTIMES_DIR, `java-${version}`);
+  const javaDir = path.join(getRuntimesDir(), `java-${version}`);
   if (!fs.existsSync(javaDir)) {
     return null;
   }
@@ -54,8 +55,8 @@ export function getInstalledManagedJava(version) {
 
 export async function downloadAdoptiumJava(version, onProgress) {
   ensureRuntimesDir();
-  const targetDir = path.join(RUNTIMES_DIR, `java-${version}`);
-  const zipPath = path.join(RUNTIMES_DIR, `java-${version}.zip`);
+  const targetDir = path.join(getRuntimesDir(), `java-${version}`);
+  const zipPath = path.join(getRuntimesDir(), `java-${version}.zip`);
 
   const apiUrl = `https://api.adoptium.net/v3/binary/latest/${version}/ga/windows/x64/jdk/hotspot/normal/eclipse`;
 

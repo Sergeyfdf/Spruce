@@ -35,7 +35,9 @@ import {
   CheckCircle2,
   XCircle,
   ExternalLink,
-  Layers
+  Layers,
+  FolderOpen,
+  Upload
 } from 'lucide-react';
 import { PlayerInventoryModal } from './PlayerInventoryModal';
 import { ModDetailsDrawer } from './ModDetailsDrawer';
@@ -347,9 +349,11 @@ export const ServerDashboard: React.FC<ServerDashboardProps> = ({
   const handleTogglePlayit = async () => {
     if (!window.spruceApi) return;
     if (playit.running) {
-      await window.spruceApi.stopPlayit();
+      const res = await window.spruceApi.stopPlayit();
+      if (res) setPlayit(res);
     } else {
-      await window.spruceApi.startPlayit(server.port);
+      const res = await window.spruceApi.startPlayit(server.port);
+      if (res) setPlayit(res);
     }
   };
 
@@ -431,6 +435,31 @@ export const ServerDashboard: React.FC<ServerDashboardProps> = ({
     }
   };
 
+  const handleOpenModsFolder = async () => {
+    if (!window.spruceApi) return;
+    await window.spruceApi.openModsFolder(server.path);
+  };
+
+  const handleImportMods = async () => {
+    if (!window.spruceApi) return;
+    const res = await window.spruceApi.importMods(server.path);
+    if (res && res.success) {
+      await loadInstalledMods();
+    }
+  };
+
+  const handleExportToXmcl = async () => {
+    if (!window.spruceApi) return;
+    try {
+      const res = await window.spruceApi.exportServerToXmcl(server);
+      if (res && res.success) {
+        alert(`Сервер перенесен в XMCL: инстанс "${res.instanceName}" (${res.modsCopied} модов). Запускаем лаунчер.`);
+      }
+    } catch (e: any) {
+      alert('Ошибка при экспорте в XMCL: ' + (e.message || 'Сбой'));
+    }
+  };
+
   const handleInstallBlueMap = async () => {
     if (!window.spruceApi) return;
     setInstallingBlueMap(true);
@@ -483,6 +512,15 @@ export const ServerDashboard: React.FC<ServerDashboardProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ padding: '6px 14px' }}
+            onClick={handleExportToXmcl}
+            title="Экспортировать этот сервер с модами в лаунчер XMCL"
+          >
+            <Download size={14} />
+            <span>Экспорт в XMCL</span>
+          </button>
           <div
             className="ip-display-box"
             style={{ padding: '6px 14px', fontSize: '13px', cursor: 'pointer' }}
@@ -955,10 +993,28 @@ export const ServerDashboard: React.FC<ServerDashboardProps> = ({
                 </button>
               </div>
 
-              <button className="btn btn-secondary btn-sm" onClick={loadInstalledMods}>
-                <RefreshCw size={14} />
-                <span>Обновить папку</span>
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleOpenModsFolder}
+                  title="Открыть папку mods в проводнике"
+                >
+                  <FolderOpen size={14} />
+                  <span>Открыть папку</span>
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleImportMods}
+                  title="Импортировать файлы модов .jar с компьютера"
+                >
+                  <Upload size={14} />
+                  <span>Импортировать мод</span>
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={loadInstalledMods} title="Обновить список">
+                  <RefreshCw size={14} />
+                  <span>Обновить папку</span>
+                </button>
+              </div>
             </div>
 
             {modsTab === 'installed' ? (

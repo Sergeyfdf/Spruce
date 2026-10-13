@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, shell } from 'electron';
 import net from 'net';
 import path from 'path';
 import fs from 'fs';
@@ -9,6 +9,10 @@ import * as networkManager from './services/networkManager.js';
 import * as modService from './services/modService.js';
 import * as playerManager from './services/playerManager.js';
 import * as bluemapService from './services/bluemapService.js';
+import * as pathManager from './services/pathManager.js';
+import * as modpackService from './services/modpackService.js';
+import * as xmclService from './services/xmclService.js';
+import { startSpruceHttpBridge, stopSpruceHttpBridge } from './services/spruceBridge.js';
 import { initUpdater } from '@marzipan/updater/main';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -35,6 +39,18 @@ if (fs.existsSync(envPath)) {
 
 let mainWindow = null;
 
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 function createWindow() {
   Menu.setApplicationMenu(null);
 
@@ -47,7 +63,8 @@ function createWindow() {
     height: 860,
     minWidth: 1050,
     minHeight: 700,
-    backgroundColor: '#0b0f14',
+    backgroundColor: '#0e0e0e',
+    show: false,
     title: 'Spruce',
     icon: iconPath,
     autoHideMenuBar: true,
@@ -57,6 +74,16 @@ function createWindow() {
       nodeIntegration: false
     }
   });
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  }, 1200);
 
   mainWindow.setMenuBarVisibility(false);
 
@@ -95,6 +122,9 @@ app.whenReady().then(() => {
   app.setName('Spruce');
   app.setVersion(appVersion);
 
+  app.setAsDefaultProtocolClient('spruce');
+  startSpruceHttpBridge();
+
   setupIpc();
   createWindow();
 
@@ -111,6 +141,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  stopSpruceHttpBridge();
   networkManager.stopPlayit();
   if (process.platform !== 'darwin') {
     app.quit();
@@ -210,12 +241,14 @@ function setupIpc() {
     return await networkManager.toggleUpnp(port, enable);
   });
 
+  networkManager.onPlayitStatus((status) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('network:playit:update', status);
+    }
+  });
+
   ipcMain.handle('network:playit:start', async (_event, port = 25565) => {
-    return await networkManager.startPlayit((status) => {
-      if (mainWindow) {
-        mainWindow.webContents.send('network:playit:update', status);
-      }
-    }, port);
+    return await networkManager.startPlayit(null, port);
   });
 
   ipcMain.handle('network:playit:stop', () => {
@@ -228,6 +261,42 @@ function setupIpc() {
 
   ipcMain.handle('network:playit:setSecret', (_event, secret) => {
     return networkManager.setCustomPlayitSecret(secret);
+  });
+
+  ipcMain.handle('app:storage:get', () => {
+    return {
+      dataDir: pathManager.getDataDirectory(),
+      defaultDir: pathManager.USER_DATA_DIR,
+      isSetupCompleted: pathManager.isSetupCompleted()
+    };
+  });
+
+  ipcMain.handle('app:storage:selectDirectory', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Выбери папку для серверов и рантаймов Spruce',
+      properties: ['openDirectory', 'createDirectory']
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+      return result.filePaths[0];
+    }
+    return null;
+  });
+
+  ipcMain.handle('app:storage:setDirectory', async (_event, newPath) => {
+    return pathManager.setDataDirectory(newPath);
+  });
+
+  ipcMain.handle('app:storage:openDirectory', async (_event, targetPath) => {
+    const dirToOpen = targetPath || pathManager.getDataDirectory();
+    if (fs.existsSync(dirToOpen)) {
+      await shell.openPath(dirToOpen);
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('app:storage:completeSetup', async (_event, dirPath) => {
+    return pathManager.completeInitialSetup(dirPath);
   });
 
   ipcMain.handle('mods:modrinth:search', async (_event, params) => {
@@ -278,6 +347,37 @@ function setupIpc() {
     return modService.deleteModFile(serverPath, filename);
   });
 
+  ipcMain.handle('mods:openFolder', async (_event, serverPath) => {
+    const modsDir = path.join(serverPath, 'mods');
+    if (!fs.existsSync(modsDir)) {
+      fs.mkdirSync(modsDir, { recursive: true });
+    }
+    await shell.openPath(modsDir);
+    return { success: true };
+  });
+
+  ipcMain.handle('mods:import', async (_event, serverPath) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Выберите файлы модов (.jar)',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Minecraft Mods', extensions: ['jar'] }]
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    const modsDir = path.join(serverPath, 'mods');
+    if (!fs.existsSync(modsDir)) {
+      fs.mkdirSync(modsDir, { recursive: true });
+    }
+    let count = 0;
+    for (const src of result.filePaths) {
+      const dest = path.join(modsDir, path.basename(src));
+      fs.copyFileSync(src, dest);
+      count++;
+    }
+    return { success: true, count };
+  });
+
   ipcMain.handle('bluemap:check', (_event, args) => {
     const serverPath = typeof args === 'string' ? args : (args?.serverPath || '');
     const port = typeof args === 'object' ? (args?.port || 25565) : 25565;
@@ -321,5 +421,43 @@ function setupIpc() {
       });
       socket.connect(port, '127.0.0.1');
     });
+  });
+
+  ipcMain.handle('modpacks:search', async (_event, params) => {
+    return await modpackService.searchModrinthModpacks(params || {});
+  });
+
+  ipcMain.handle('modpacks:versions', async (_event, slugOrId) => {
+    return await modpackService.getModrinthModpackVersions(slugOrId);
+  });
+
+  ipcMain.handle('modpacks:download', async (_event, params) => {
+    return await modpackService.downloadModrinthModpack(params, (p) => {
+      if (mainWindow) mainWindow.webContents.send('modpacks:download-progress', p);
+    });
+  });
+
+  ipcMain.handle('modpacks:list', () => {
+    return modpackService.listLocalModpacks();
+  });
+
+  ipcMain.handle('modpacks:create', (_event, data) => {
+    return modpackService.createLocalModpack(data);
+  });
+
+  ipcMain.handle('modpacks:delete', (_event, id) => {
+    return modpackService.deleteLocalModpack(id);
+  });
+
+  ipcMain.handle('version:loaderVersions', async (_event, { loader, mcVersion }) => {
+    return await versionService.getLoaderVersions(loader, mcVersion);
+  });
+
+  ipcMain.handle('xmcl:export', async (_event, server) => {
+    return await xmclService.exportServerToXmcl(server);
+  });
+
+  ipcMain.handle('xmcl:isInstalled', () => {
+    return xmclService.isXmclInstalled();
   });
 }

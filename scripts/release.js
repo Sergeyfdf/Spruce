@@ -95,7 +95,7 @@ async function run() {
   console.log(`Installer found: ${exeName} (${Math.round(fs.statSync(exePath).size / 1024 / 1024)} MB)`);
 
   console.log('Committing version bump and pushing tag...');
-  execSync(`git add package.json package-lock.json`, { cwd: rootDir, stdio: 'inherit' });
+  execSync(`git add .`, { cwd: rootDir, stdio: 'inherit' });
   execSync(`git commit -m "Release v${newVersion}"`, { cwd: rootDir, stdio: 'inherit' });
   execSync(`git tag -f v${newVersion}`, { cwd: rootDir, stdio: 'inherit' });
   execSync(`git push origin main --tags`, { cwd: rootDir, stdio: 'inherit' });

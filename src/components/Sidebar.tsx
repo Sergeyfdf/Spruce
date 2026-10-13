@@ -1,5 +1,5 @@
 import React from 'react';
-import { Server, PlusCircle, Radio, Settings, ShieldCheck } from 'lucide-react';
+import { Server, PlusCircle, Radio, Settings, ShieldCheck, Layers } from 'lucide-react';
 import spruceIcon from '../assets/icon.png';
 
 interface SidebarProps {
@@ -46,6 +46,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <PlusCircle size={20} />
           <span>Создать сервер</span>
+        </button>
+
+        <div className="sidebar-divider" />
+
+        <button
+          className={`nav-item ${currentView === 'modpacks' ? 'active' : ''}`}
+          onClick={() => onSelectView('modpacks')}
+        >
+          <Layers size={20} />
+          <span>Модпаки</span>
         </button>
 
         <div className="sidebar-divider" />

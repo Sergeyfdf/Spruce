@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, Loader2 } from 'lucide-react';
-import { McVersion } from '../types';
+import { McVersion, ModpackItem } from '../types';
 
 interface ServerCreateModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialModpackId?: string;
   onCreate: (data: {
     name: string;
     mcVersion: string;
     loader: 'vanilla' | 'fabric' | 'forge' | 'neoforge';
+    loaderVersion?: string;
+    modpackId?: string;
     ramMin: number;
     ramMax: number;
     port: number;
@@ -19,11 +22,17 @@ interface ServerCreateModalProps {
 export const ServerCreateModal: React.FC<ServerCreateModalProps> = ({
   isOpen,
   onClose,
+  initialModpackId,
   onCreate
 }) => {
   const [name, setName] = useState('Мой сервер Spruce');
   const [mcVersion, setMcVersion] = useState('1.20.1');
   const [loader, setLoader] = useState<'vanilla' | 'fabric' | 'forge' | 'neoforge'>('forge');
+  const [loaderVersion, setLoaderVersion] = useState('');
+  const [loaderVersions, setLoaderVersions] = useState<string[]>([]);
+  const [loadingLoaderVersions, setLoadingLoaderVersions] = useState(false);
+  const [selectedModpackId, setSelectedModpackId] = useState<string>('');
+  const [localModpacks, setLocalModpacks] = useState<ModpackItem[]>([]);
   const [ramMax, setRamMax] = useState(4096);
   const [port, setPort] = useState(25565);
   const [seed, setSeed] = useState('');
@@ -81,6 +90,62 @@ export const ServerCreateModal: React.FC<ServerCreateModalProps> = ({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !window.spruceApi) return;
+    window.spruceApi.listLocalModpacks().then((list: any[]) => {
+      if (Array.isArray(list)) {
+        setLocalModpacks(list);
+        if (initialModpackId) {
+          const found = list.find((m) => m.id === initialModpackId);
+          if (found) {
+            setSelectedModpackId(found.id);
+            setName(found.name);
+            setMcVersion(found.mcVersion);
+            setLoader(found.loader);
+            if (found.loaderVersion) setLoaderVersion(found.loaderVersion);
+          }
+        }
+      }
+    });
+  }, [isOpen, initialModpackId]);
+
+  useEffect(() => {
+    if (!isOpen || loader === 'vanilla' || !window.spruceApi) {
+      setLoaderVersions([]);
+      setLoaderVersion('');
+      return;
+    }
+    setLoadingLoaderVersions(true);
+    window.spruceApi
+      .getLoaderVersions(loader, mcVersion)
+      .then((list: string[]) => {
+        if (Array.isArray(list) && list.length > 0) {
+          setLoaderVersions(list);
+          setLoaderVersion(list[0]);
+        } else {
+          setLoaderVersions([]);
+          setLoaderVersion('');
+        }
+      })
+      .catch(() => {
+        setLoaderVersions([]);
+        setLoaderVersion('');
+      })
+      .finally(() => setLoadingLoaderVersions(false));
+  }, [isOpen, loader, mcVersion]);
+
+  const handleSelectModpack = (id: string) => {
+    setSelectedModpackId(id);
+    if (!id) return;
+    const found = localModpacks.find((m) => m.id === id);
+    if (found) {
+      setName(found.name);
+      setMcVersion(found.mcVersion);
+      setLoader(found.loader as any);
+      if (found.loaderVersion) setLoaderVersion(found.loaderVersion);
+    }
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,6 +158,8 @@ export const ServerCreateModal: React.FC<ServerCreateModalProps> = ({
         name,
         mcVersion,
         loader,
+        loaderVersion: loaderVersion.trim() || undefined,
+        modpackId: selectedModpackId || undefined,
         ramMin: Math.min(1024, ramMax),
         ramMax,
         port,
@@ -119,6 +186,25 @@ export const ServerCreateModal: React.FC<ServerCreateModalProps> = ({
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            {localModpacks.length > 0 && (
+              <div className="form-group">
+                <label className="form-label">Установить модпак (необязательно)</label>
+                <select
+                  className="form-select"
+                  value={selectedModpackId}
+                  onChange={(e) => handleSelectModpack(e.target.value)}
+                  disabled={submitting}
+                >
+                  <option value="">Без модпака (чистая установка)</option>
+                  {localModpacks.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({m.mcVersion} • {m.loader})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="form-group">
               <label className="form-label">Название сервера</label>
               <input
@@ -164,6 +250,32 @@ export const ServerCreateModal: React.FC<ServerCreateModalProps> = ({
                 </select>
               </div>
             </div>
+
+            {loader !== 'vanilla' && (
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="form-label">Версия {loader.toUpperCase()}</label>
+                  {loadingLoaderVersions && (
+                    <span style={{ fontSize: '11px', color: '#a1a1aa' }}>Загрузка версий...</span>
+                  )}
+                </div>
+                <select
+                  className="form-select"
+                  value={loaderVersion}
+                  onChange={(e) => setLoaderVersion(e.target.value)}
+                  disabled={submitting || loadingLoaderVersions}
+                >
+                  {loaderVersions.map((lv) => (
+                    <option key={lv} value={lv}>
+                      {lv}
+                    </option>
+                  ))}
+                  {loaderVersions.length === 0 && (
+                    <option value="">Рекомендуемая / последняя</option>
+                  )}
+                </select>
+              </div>
+            )}
 
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -39,6 +39,12 @@ contextBridge.exposeInMainWorld('spruceApi', {
   getPlayitStatus: (port) => ipcRenderer.invoke('network:playit:status', port),
   setPlayitSecret: (secret) => ipcRenderer.invoke('network:playit:setSecret', secret),
 
+  getStorageConfig: () => ipcRenderer.invoke('app:storage:get'),
+  selectDirectory: () => ipcRenderer.invoke('app:storage:selectDirectory'),
+  setStorageDirectory: (dirPath) => ipcRenderer.invoke('app:storage:setDirectory', dirPath),
+  openDirectory: (dirPath) => ipcRenderer.invoke('app:storage:openDirectory', dirPath),
+  completeInitialSetup: (dirPath) => ipcRenderer.invoke('app:storage:completeSetup', dirPath),
+
   searchModrinth: (params) => ipcRenderer.invoke('mods:modrinth:search', params),
   getModrinthProject: (idOrSlug) => ipcRenderer.invoke('mods:modrinth:project', idOrSlug),
   getModrinthVersions: (idOrSlug) => ipcRenderer.invoke('mods:modrinth:versions', idOrSlug),
@@ -51,6 +57,8 @@ contextBridge.exposeInMainWorld('spruceApi', {
   listInstalledMods: (serverPath) => ipcRenderer.invoke('mods:list', serverPath),
   toggleModState: (serverPath, filename) => ipcRenderer.invoke('mods:toggle', { serverPath, filename }),
   deleteModFile: (serverPath, filename) => ipcRenderer.invoke('mods:delete', { serverPath, filename }),
+  openModsFolder: (serverPath) => ipcRenderer.invoke('mods:openFolder', serverPath),
+  importMods: (serverPath) => ipcRenderer.invoke('mods:import', serverPath),
 
   isBlueMapInstalled: (serverPath, port) => ipcRenderer.invoke('bluemap:check', { serverPath, port }),
   installBlueMap: (serverPath, loader, mcVer, port) => ipcRenderer.invoke('bluemap:install', { serverPath, loader, mcVer, port }),
@@ -72,5 +80,22 @@ contextBridge.exposeInMainWorld('spruceApi', {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on('network:playit:update', handler);
     return () => ipcRenderer.removeListener('network:playit:update', handler);
-  }
+  },
+
+  searchModpacks: (params) => ipcRenderer.invoke('modpacks:search', params),
+  getModpackVersions: (slugOrId) => ipcRenderer.invoke('modpacks:versions', slugOrId),
+  downloadModpack: (params) => ipcRenderer.invoke('modpacks:download', params),
+  listLocalModpacks: () => ipcRenderer.invoke('modpacks:list'),
+  createLocalModpack: (data) => ipcRenderer.invoke('modpacks:create', data),
+  deleteLocalModpack: (id) => ipcRenderer.invoke('modpacks:delete', id),
+  onModpackDownloadProgress: (callback) => {
+    const handler = (_event, p) => callback(p);
+    ipcRenderer.on('modpacks:download-progress', handler);
+    return () => ipcRenderer.removeListener('modpacks:download-progress', handler);
+  },
+
+  getLoaderVersions: (loader, mcVersion) => ipcRenderer.invoke('version:loaderVersions', { loader, mcVersion }),
+
+  exportServerToXmcl: (server) => ipcRenderer.invoke('xmcl:export', server),
+  isXmclInstalled: () => ipcRenderer.invoke('xmcl:isInstalled')
 });
