@@ -82,12 +82,26 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.spruce.minecraft');
   }
+
+  const pkgPath = path.join(__dirname, '../package.json');
+  let appVersion = '1.0.0';
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      if (pkg.version) appVersion = pkg.version;
+    } catch (e) {
+    }
+  }
+  app.setName('Spruce');
+  app.setVersion(appVersion);
+
   setupIpc();
   createWindow();
 
   initUpdater({
     repo: process.env.GITHUB_REPO || 'Sergeyfdf/Spruce',
     customFeedUrl: process.env.UPDATE_FEED_URL || undefined,
+    currentVersion: appVersion,
     getMainWindow: () => mainWindow
   });
 
