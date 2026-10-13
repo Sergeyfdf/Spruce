@@ -1,6 +1,6 @@
 {
   "name": "spruce",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Minecraft Server Manager and Orchestrator",
   "main": "electron/main.js",
   "type": "module",
@@ -53,10 +53,12 @@
       "icon": "electron/icon.ico"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": false
     }
   }
 }
