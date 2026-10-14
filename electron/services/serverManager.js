@@ -89,6 +89,7 @@ export async function createServer({ name, mcVersion, loader, ramMin = 2048, ram
   if (loader === 'fabric') {
     const loaders = await getFabricLoaders(mcVersion);
     const loaderVer = data.loaderVersion || loaders[0] || '0.16.10';
+    meta.loaderVersion = loaderVer;
     const installerVer = '1.0.1';
     const fabricUrl = `https://meta.fabricmc.net/v2/versions/loader/${mcVersion}/${loaderVer}/${installerVer}/server/jar`;
 
@@ -101,11 +102,13 @@ export async function createServer({ name, mcVersion, loader, ramMin = 2048, ram
       }
     });
     fs.writeFileSync(jarPath, Buffer.from(jarRes.data));
+    fs.writeFileSync(path.join(serverPath, 'spruce.json'), JSON.stringify(meta, null, 2));
   } else if (loader === 'forge') {
     const forgeVer = data.loaderVersion || await getForgeVersion(mcVersion);
     if (!forgeVer) {
       throw new Error(`Версия Forge для Minecraft ${mcVersion} не найдена`);
     }
+    meta.loaderVersion = forgeVer;
 
     const installerUrl = `https://maven.minecraftforge.net/net/minecraftforge/forge/${mcVersion}-${forgeVer}/forge-${mcVersion}-${forgeVer}-installer.jar`;
     const installerPath = path.join(serverPath, 'forge-installer.jar');
@@ -149,6 +152,7 @@ export async function createServer({ name, mcVersion, loader, ramMin = 2048, ram
     if (!neoVer) {
       throw new Error(`Версия NeoForge для Minecraft ${mcVersion} не найдена (поддерживается с 1.20.2+)`);
     }
+    meta.loaderVersion = neoVer;
 
     const installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${neoVer}/neoforge-${neoVer}-installer.jar`;
     const installerPath = path.join(serverPath, 'neoforge-installer.jar');

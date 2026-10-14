@@ -39,12 +39,34 @@ export function startSpruceHttpBridge() {
               modsCount = fs.readdirSync(modsDir).filter((f) => f.endsWith('.jar') && !f.endsWith('.disabled')).length;
             }
           } catch (e) {}
+          let resolvedLoaderVer = s.loaderVersion || '';
+          if (!resolvedLoaderVer) {
+            try {
+              if (s.loader === 'forge') {
+                const forgeLibDir = path.join(s.path, 'libraries', 'net', 'minecraftforge', 'forge');
+                if (fs.existsSync(forgeLibDir)) {
+                  const dirs = fs.readdirSync(forgeLibDir);
+                  if (dirs.length > 0) {
+                    resolvedLoaderVer = dirs[0].replace(`${s.mcVersion}-`, '');
+                  }
+                }
+              } else if (s.loader === 'neoforge') {
+                const neoLibDir = path.join(s.path, 'libraries', 'net', 'neoforged', 'neoforge');
+                if (fs.existsSync(neoLibDir)) {
+                  const dirs = fs.readdirSync(neoLibDir);
+                  if (dirs.length > 0) {
+                    resolvedLoaderVer = dirs[0];
+                  }
+                }
+              }
+            } catch (e) {}
+          }
           return {
             id: s.id,
             name: s.name,
             mcVersion: s.mcVersion,
             loader: s.loader,
-            loaderVersion: s.loaderVersion || '',
+            loaderVersion: resolvedLoaderVer,
             port: s.port || 25565,
             ramMax: s.ramMax || 4096,
             path: s.path,
@@ -85,6 +107,9 @@ export function startSpruceHttpBridge() {
               const files = fs.readdirSync(srcMods);
               for (const f of files) {
                 if (f.endsWith('.jar') && !f.endsWith('.disabled')) {
+                  if (f.toLowerCase().includes('bluemap')) {
+                    continue;
+                  }
                   fs.copyFileSync(path.join(srcMods, f), path.join(dstMods, f));
                   copied++;
                 }

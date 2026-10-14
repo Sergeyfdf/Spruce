@@ -70,10 +70,22 @@ body {
   display: flex;
   height: 100vh;
   width: 100vw;
-  background-image: url('./assets/spruce_leaves_tinted.png');
+  background-image: url('./assets/spruce_leaves_brown.png');
   background-repeat: repeat;
   background-size: 64px 64px;
   image-rendering: pixelated;
+}
+
+.app-container.theme-brown {
+  background-image: url('./assets/spruce_leaves_brown.png');
+}
+
+.app-container.theme-green {
+  background-image: url('./assets/spruce_leaves_green.png');
+}
+
+.app-container.theme-snowy {
+  background-image: url('./assets/spruce_leaves_snowy.png');
 }
 
 .sidebar {

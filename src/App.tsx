@@ -8,6 +8,7 @@ import { Radio, ShieldCheck, HardDrive, RefreshCw, Copy, Check, ExternalLink } f
 import { UpdateCard } from '@marzipan/updater/react';
 import '@marzipan/updater/react/style.css';
 import { StorageSettingsCard } from './components/StorageSettingsCard';
+import { ThemeSettingsCard, LeavesTheme } from './components/ThemeSettingsCard';
 import { InitialSetupModal } from './components/InitialSetupModal';
 import { ModpacksView } from './components/ModpacksView';
 import { StorageConfig } from './types';
@@ -22,6 +23,16 @@ export const App: React.FC = () => {
   const [copiedTunnel, setCopiedTunnel] = useState(false);
   const [manualSecret, setManualSecret] = useState('');
   const [isInitialSetupOpen, setIsInitialSetupOpen] = useState(false);
+  const [leavesTheme, setLeavesTheme] = useState<LeavesTheme>(() => {
+    const saved = localStorage.getItem('spruce_leaves_theme');
+    if (saved === 'green' || saved === 'snowy' || saved === 'brown') return saved as LeavesTheme;
+    return 'brown';
+  });
+
+  const handleSelectTheme = (theme: LeavesTheme) => {
+    setLeavesTheme(theme);
+    localStorage.setItem('spruce_leaves_theme', theme);
+  };
 
   const [playit, setPlayit] = useState<PlayitStatus>({
     running: false,
@@ -142,7 +153,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container theme-${leavesTheme}`}>
       <Sidebar
         currentView={currentView}
         onSelectView={(view) => {
@@ -312,6 +323,7 @@ export const App: React.FC = () => {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '20px', alignItems: 'start' }}>
+                <ThemeSettingsCard currentTheme={leavesTheme} onSelectTheme={handleSelectTheme} />
                 <StorageSettingsCard />
                 <UpdateCard title="Обновления Spruce" />
               </div>
